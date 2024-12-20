@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive Story Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f4f4f4;
+        }
+        #story-container {
+            background-color: white;
+            border: 2px solid #333;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 300px;
+            white-space: pre-wrap;
+        }
+        #genre-help {
+            margin-bottom: 20px;
+        }
+        #choices {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .choice-btn {
+            padding: 10px;
+            background-color: #e0e0e0;
+            border: 1px solid #333;
+            cursor: pointer;
+            text-align: left;
+        }
+        .choice-btn:hover {
+            background-color: #d0d0d0;
+        }
+        #genre-input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="genre-help">
+        <h2>Choose a Genre</h2>
+        <input type="text" id="genre-input" placeholder="Enter genre (or type 'help')">
+        <button onclick="getGenreHelp()">Get Genre Help</button>
+        <div id="genre-suggestions"></div>
+    </div>
+
+    <div id="story-container"></div>
+    
+    <div id="choices"></div>
+
+    <script>
+        const socket = io();
+        const storyContainer = document.getElementById('story-container');
+        const choicesContainer = document.getElementById('choices');
+        const genreInput = document.getElementById('genre-input');
+        const genreSuggestions = document.getElementById('genre-suggestions');
+
+        function getGenreHelp() {
+            socket.emit('get_genre_help');
+        }
+
+        function startStory() {
+            const genre = genreInput.value.trim().toLowerCase();
+            if (genre) {
+                storyContainer.innerHTML = 'Generating story...';
+                choicesContainer.innerHTML = '';
+                socket.emit('start_story', { genre: genre });
+            }
+        }
+
+        function makeChoice(choice) {
+            storyContainer.innerHTML = 'Continuing story...';
+            choicesContainer.innerHTML = '';
+            socket.emit('make_choice', { choice: choice });
+        }
+
+        socket.on('genre_help', (data) => {
+            genreSuggestions.innerHTML = `<p>${data.genres}</p>`;
+        });
+
+        socket.on('story_stream', (data) => {
+            storyContainer.innerHTML += data.text;
+            storyContainer.scrollTop = storyContainer.scrollHeight;
+        });
+
+        socket.on('story_started', (data) => {
+            storyContainer.innerHTML = data.story;
+            
+            if (data.choices) {
+                choicesContainer.innerHTML = '';
+                Object.entries(data.choices).forEach(([key, value]) => {
+                    const choiceBtn = document.createElement('button');
+                    choiceBtn.className = 'choice-btn';
+                    choiceBtn.innerHTML = `<strong>(${key})</strong> ${value}`;
+                    choiceBtn.onclick = () => makeChoice(key);
+                    choicesContainer.appendChild(choiceBtn);
+                });
+            }
+        });
+
+        socket.on('story_continued', (data) => {
+            storyContainer.innerHTML += '\n\n' + data.story;
+            
+            if (data.choices) {
+                choicesContainer.innerHTML = '';
+                Object.entries(data.choices).forEach(([key, value]) => {
+                    const choiceBtn = document.createElement('button');
+                    choiceBtn.className = 'choice-btn';
+                    choiceBtn.innerHTML = `<strong>(${key})</strong> ${value}`;
+                    choiceBtn.onclick = () => makeChoice(key);
+                    choicesContainer.appendChild(choiceBtn);
+                });
+            }
+        });
+
+        // Event listener for genre input
+        genreInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                if (this.value.toLowerCase() === 'help') {
+                    getGenreHelp();
+                } else {
+                    startStory();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
